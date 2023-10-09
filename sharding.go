@@ -145,12 +145,21 @@ func (s *Sharding) compile() error {
 			c.PrimaryKeyGeneratorFn = func(index int64) int64 {
 				return s.genPostgreSQLSequenceKey(t, index)
 			}
+		} else if c.PrimaryKeyGenerator == PKMySQLSequence {
+			err := s.createMySQLSequenceKeyIfNotExist(t)
+			if err != nil {
+				return err
+			}
+
+			c.PrimaryKeyGeneratorFn = func(index int64) int64 {
+				return s.genMySQLSequenceKey(t, index)
+			}
 		} else if c.PrimaryKeyGenerator == PKCustom {
 			if c.PrimaryKeyGeneratorFn == nil {
 				return errors.New("PrimaryKeyGeneratorFn is required when use PKCustom")
 			}
 		} else {
-			return errors.New("PrimaryKeyGenerator can only be one of PKSnowflake, PKPGSequence and PKCustom")
+			return errors.New("PrimaryKeyGenerator can only be one of PKSnowflake, PKPGSequence, PKMySQLSequence and PKCustom")
 		}
 
 		if c.ShardingAlgorithm == nil {
@@ -238,6 +247,16 @@ func (s *Sharding) Initialize(db *gorm.DB) error {
 			err := s.DB.Exec("CREATE SEQUENCE IF NOT EXISTS " + pgSeqName(t)).Error
 			if err != nil {
 				return fmt.Errorf("init postgresql sequence error, %w", err)
+			}
+		}
+		if c.PrimaryKeyGenerator == PKMySQLSequence {
+			err := s.DB.Exec("CREATE TABLE IF NOT EXISTS " + mySQLSeqName(t) + " (id INT NOT NULL)").Error
+			if err != nil {
+				return fmt.Errorf("init mysql create sequence error, %w", err)
+			}
+			err = s.DB.Exec("INSERT INTO " + mySQLSeqName(t) + " VALUES (0)").Error
+			if err != nil {
+				return fmt.Errorf("init mysql insert sequence error, %w", err)
 			}
 		}
 	}
