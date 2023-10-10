@@ -189,7 +189,11 @@ func dropTables() {
 		dbNoID.Exec("DROP TABLE IF EXISTS " + table)
 		dbRead.Exec("DROP TABLE IF EXISTS " + table)
 		dbWrite.Exec("DROP TABLE IF EXISTS " + table)
-		db.Exec(("DROP SEQUENCE IF EXISTS gorm_sharding_" + table + "_id_seq"))
+		if mysqlDialector() {
+			db.Exec(("DROP TABLE IF EXISTS gorm_sharding_" + table + "_id_seq"))
+		} else {
+			db.Exec(("DROP SEQUENCE IF EXISTS gorm_sharding_" + table + "_id_seq"))
+		}
 	}
 }
 
@@ -417,6 +421,27 @@ func TestPKPGSequence(t *testing.T) {
 	assert.Equal(t, expected, middleware.LastQuery())
 }
 
+func TestPKMySQLSequence(t *testing.T) {
+	if !mysqlDialector() {
+		return
+	}
+
+	db, _ := gorm.Open(mysql.Open(dbURL()), &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true,
+	})
+	shardingConfig.PrimaryKeyGenerator = PKMySQLSequence
+	middleware := Register(shardingConfig, &Order{})
+	db.Use(middleware)
+
+	db.Exec("UPDATE `" + mySQLSeqName("orders") + "` SET id = 42")
+	db.Create(&Order{UserID: 100, Product: "iPhone"})
+	expected := "INSERT INTO orders_0 (`user_id`, `product`, id) VALUES (?, ?, 43)"
+	if mariadbDialector() {
+		expected = expected + " RETURNING `id`"
+	}
+	assert.Equal(t, expected, middleware.LastQuery())
+}
+
 func TestReadWriteSplitting(t *testing.T) {
 	dbRead.Exec("INSERT INTO orders_0 (id, product, user_id) VALUES(1, 'iPad', 100)")
 	dbWrite.Exec("INSERT INTO orders_0 (id, product, user_id) VALUES(1, 'iPad', 100)")
@@ -530,4 +555,8 @@ func assertSfidQueryResult(t *testing.T, expected, lastQuery string) {
 
 func mysqlDialector() bool {
 	return os.Getenv("DIALECTOR") == "mysql" || os.Getenv("DIALECTOR") == "mariadb"
+}
+
+func mariadbDialector() bool {
+	return os.Getenv("DIALECTOR") == "mariadb"
 }

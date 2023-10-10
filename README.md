@@ -120,6 +120,22 @@ db.Use(sharding.Register(sharding.Config{
 }, "orders")
 ```
 
+### Use MySQL Sequence
+
+There has built-in MySQL sequence primary key implementation in Gorm Sharding, you just configure `PrimaryKeyGenerator: sharding.PKMySQLSequence` to use.
+
+You don't need create sequence manually, Gorm Sharding check and create when the MySQL sequence does not exists.
+
+This sequence name followed `gorm_sharding_${table_name}_id_seq`, for example `orders` table, the sequence name is `gorm_sharding_orders_id_seq`.
+
+```go
+db.Use(sharding.Register(sharding.Config{
+    ShardingKey:         "user_id",
+    NumberOfShards:      64,
+    PrimaryKeyGenerator: sharding.PKMySQLSequence,
+}, "orders")
+```
+
 ### No primary key
 
 If your table doesn't have a primary key, or has a primary key that isn't called `id`, anyway, you don't want to auto-fill the `id` field, then you can set `PrimaryKeyGenerator` to `PKCustom` and have `PrimaryKeyGeneratorFn` return `0`.
