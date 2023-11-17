@@ -2,6 +2,8 @@ package sharding
 
 import (
 	"fmt"
+	"gorm.io/gorm/migrator"
+	"gorm.io/gorm/schema"
 
 	"gorm.io/gorm"
 )
@@ -59,6 +61,11 @@ func (m ShardingMigrator) AutoMigrate(dst ...any) error {
 	}
 
 	return nil
+}
+
+// BuildIndexOptions build index options
+func (m ShardingMigrator) BuildIndexOptions(opts []schema.IndexOption, stmt *gorm.Statement) (results []interface{}) {
+	return m.Migrator.(migrator.BuildIndexOptionsInterface).BuildIndexOptions(opts, stmt)
 }
 
 func (m ShardingMigrator) DropTable(dst ...any) error {
