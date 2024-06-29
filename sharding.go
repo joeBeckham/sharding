@@ -110,6 +110,13 @@ func Register(config Config, tables ...any) *Sharding {
 	}
 }
 
+func RegisterMoreToMore(configs map[string]Config) *Sharding {
+	s := &Sharding{
+		configs: configs,
+	}
+	return s
+}
+
 func (s *Sharding) compile() error {
 	if s.configs == nil {
 		s.configs = make(map[string]Config)
