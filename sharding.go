@@ -560,7 +560,7 @@ func (s *Sharding) nonInsertValue(key string, condition sqlparser.Expr, args ...
 	}
 
 	if !keyFind && id == 0 {
-		return nil, 0, keyFind, ErrMissingShardingKey
+		return nil, 0, keyFind, nil
 	}
 
 	return
