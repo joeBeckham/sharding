@@ -433,6 +433,18 @@ func (s *Sharding) resolve(query string, args ...any) (ftQuery, stQuery, tableNa
 			return
 		}
 
+		if !keyFind {
+			// 如果没有找到分片键，则进行全表扫描
+			suffixes := r.ShardingSuffixs()
+			fullTableQueries := make([]string, len(suffixes))
+			for i, suffix := range suffixes {
+				fullTableQueries[i] = strings.Replace(query, tableName, tableName+suffix, 1)
+			}
+			ftQuery = strings.Join(fullTableQueries, " UNION ALL ")
+			stQuery = ftQuery
+			return
+		}
+
 		suffix, err = getSuffix(value, id, keyFind, r)
 		if err != nil {
 			return
