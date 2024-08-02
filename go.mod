@@ -12,6 +12,7 @@ require (
 	gorm.io/gorm v1.25.4
 	gorm.io/hints v1.1.2
 	gorm.io/plugin/dbresolver v1.5.1
+	gorm.io/sharding v0.6.1
 )
 
 require (

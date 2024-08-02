@@ -74,3 +74,5 @@ gorm.io/hints v1.1.2 h1:b5j0kwk5p4+3BtDtYqqfY+ATSxjj+6ptPgVveuynn9o=
 gorm.io/hints v1.1.2/go.mod h1:/ARdpUHAtyEMCh5NNi3tI7FsGh+Cj/MIUlvNxCNCFWg=
 gorm.io/plugin/dbresolver v1.5.1 h1:s9Dj9f7r+1rE3nx/Ywzc85nXptUEaeOO0pt27xdopM8=
 gorm.io/plugin/dbresolver v1.5.1/go.mod h1:l4Cn87EHLEYuqUncpEeTC2tTJQkjngPSD+lo8hIvcT0=
+gorm.io/sharding v0.6.1 h1:W5RsUnnUgvVhR79zcknsrfrQP3BlWuCUuB/TSEEYFzA=
+gorm.io/sharding v0.6.1/go.mod h1:uOL3jVHl4p5sKy22KrUqGr9bU+g6tOCbTT27/4j8IyI=

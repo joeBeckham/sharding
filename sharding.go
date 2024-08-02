@@ -103,6 +103,7 @@ type Config struct {
 	PrimaryKeyGeneratorFn func(tableIdx int64) int64
 }
 
+// Register 多个表注册一个分片策略
 func Register(config Config, tables ...any) *Sharding {
 	return &Sharding{
 		_config: config,
@@ -110,6 +111,7 @@ func Register(config Config, tables ...any) *Sharding {
 	}
 }
 
+// RegisterMoreToMore 每个表注册单独的分片策略
 func RegisterMoreToMore(configs map[string]Config) *Sharding {
 	s := &Sharding{
 		configs: configs,
@@ -295,16 +297,41 @@ func (s *Sharding) switchConn(db *gorm.DB) {
 	// information by table name during the migration.
 	if _, ok := db.Get(ShardingIgnoreStoreKey); !ok {
 		s.mutex.Lock()
+		defer s.mutex.Unlock()
+
 		if db.Statement.ConnPool != nil {
 			s.ConnPool = &ConnPool{ConnPool: db.Statement.ConnPool, sharding: s}
 			db.Statement.ConnPool = s.ConnPool
 		}
-		s.mutex.Unlock()
+
+		if db.Statement.SQL.String() != "" {
+			query := db.Statement.SQL.String()
+			args := db.Statement.Vars
+
+			ftQuery, stQuery, tableName, newArgs, _, err := s.resolve(query, args...)
+			if err != nil {
+				db.AddError(err)
+				return
+			}
+
+			if ftQuery != "" {
+				db.Statement.SQL.Reset()
+				db.Statement.SQL.WriteString(ftQuery)
+				db.Statement.Vars = newArgs // 使用新的参数切片
+			} else if stQuery != "" {
+				db.Statement.SQL.Reset()
+				db.Statement.SQL.WriteString(stQuery)
+			}
+
+			if tableName != "" {
+				db.Statement.Table = tableName
+			}
+		}
 	}
 }
 
 // resolve split the old query to full table query and sharding table query
-func (s *Sharding) resolve(query string, args ...any) (ftQuery, stQuery, tableName string, err error) {
+func (s *Sharding) resolve(query string, args ...any) (ftQuery, stQuery, tableName string, newArgs []interface{}, needFullScan bool, err error) {
 	ftQuery = query
 	stQuery = query
 	if len(s.configs) == 0 {
@@ -313,7 +340,7 @@ func (s *Sharding) resolve(query string, args ...any) (ftQuery, stQuery, tableNa
 
 	expr, err := sqlparser.NewParser(strings.NewReader(query)).ParseStatement()
 	if err != nil {
-		return ftQuery, stQuery, tableName, nil
+		return ftQuery, stQuery, tableName, args, false, nil
 	}
 
 	var table *sqlparser.TableName
@@ -347,7 +374,7 @@ func (s *Sharding) resolve(query string, args ...any) (ftQuery, stQuery, tableNa
 		condition = stmt.Condition
 		table = stmt.TableName
 	default:
-		return ftQuery, stQuery, "", sqlparser.ErrNotImplemented
+		return ftQuery, stQuery, "", args, false, sqlparser.ErrNotImplemented
 	}
 
 	tableName = table.Name.Name
@@ -398,7 +425,7 @@ func (s *Sharding) resolve(query string, args ...any) (ftQuery, stQuery, tableNa
 				if err != nil {
 					tblIdx = slices.Index(r.ShardingSuffixs(), suffix)
 					if tblIdx == -1 {
-						return ftQuery, stQuery, tableName, errors.New("table suffix '" + suffix + "' is not in ShardingSuffixs. In order to generate the primary key, ShardingSuffixs should include all table suffixes")
+						return ftQuery, stQuery, tableName, args, false, errors.New("table suffix '" + suffix + "' is not in ShardingSuffixs. In order to generate the primary key, ShardingSuffixs should include all table suffixes")
 					}
 					//return ftQuery, stQuery, tableName, err
 				}
@@ -437,12 +464,19 @@ func (s *Sharding) resolve(query string, args ...any) (ftQuery, stQuery, tableNa
 			// 如果没有找到分片键，则进行全表扫描
 			suffixes := r.ShardingSuffixs()
 			fullTableQueries := make([]string, len(suffixes))
+			newArgs = make([]interface{}, 0, len(suffixes)*len(args))
+
+			// 为每个分片表创建查询
 			for i, suffix := range suffixes {
 				fullTableQueries[i] = strings.Replace(query, tableName, tableName+suffix, 1)
+				newArgs = append(newArgs, args...)
 			}
+
+			// 使用 UNION ALL 连接所有查询
 			ftQuery = strings.Join(fullTableQueries, " UNION ALL ")
 			stQuery = ftQuery
-			return
+
+			return ftQuery, stQuery, tableName, newArgs, true, nil
 		}
 
 		suffix, err = getSuffix(value, id, keyFind, r)
